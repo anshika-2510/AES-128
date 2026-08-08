@@ -1,0 +1,39 @@
+# Synthesis ((Genus) Results
+
+Results from synthesizing `aes_one_round_custom` in Genus ,one round of the AES pipeline (SubBytes → MixColumns → AddRoundKey), mapped to the SAED 90nm typical library.
+
+## Issues while running
+
+
+
+- `constraints.sdc` referenced a clock port called `clk` that didn't actually exist in the design under that name, so `read_sdc` threw errors trying to create the clock and set clock uncertainty on it.
+- The SDC also tried setting a driving cell (`BUFX2`) that isn't in the SAED90nm library, so that failed too.
+- I initially used the old `syn` command, which Genus flagged as obsolete — it wants `syn_generic`, `syn_map`, and `syn_opt` run as separate stages now.
+- Also tried running `syn_map` before `syn_generic` had finished, which Genus rejected since mapping needs a generic-synthesized design to work from.
+
+Fixed the clock name, dropped the invalid `BUFX2` reference, ran the stages in order (`syn_generic` → `syn_map` → `syn_opt_incr`), and it went through clean.
+
+## Final numbers
+
+**Area:**
+
+| Instance | Cell Count | Cell Area | Total Area |
+|---|---|---|---|
+| aes_one_round_custom | 1574 | 18229.248 µm² | 18229.248 µm² |
+
+Started around 1297 cells right after generic mapping, grew a bit during incremental optimization.
+
+**Power:**
+
+| Component | Value | % of total |
+|---|---|---|
+| Leakage | 1.09e-04 W | 9.74% |
+| Internal | 9.06e-04 W | 80.57% |
+| Switching | 1.09e-04 W | 9.70% |
+| **Total** | **1.12e-03 W** | 100% |
+
+All of it's in the "logic" category since this instance has no registers/latches/clock tree — just one round of combinational logic. Internal power dominating makes sense here: 16 parallel S-boxes feeding MixColumns and a final XOR is a lot of node toggling per evaluation, and with nothing sequential in the mix there's no averaging out the switching.
+
+## Conclusion
+
+Round synthesizes fine, area/power look reasonable for a combinational AES round. Timing's the one thing still open — that's next after the constraints file gets sorted.
