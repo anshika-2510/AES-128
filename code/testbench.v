@@ -1,43 +1,48 @@
 `timescale 1ns/1ps
-module aes_128_tb;
 
+module tb_aes128;
     reg clk = 0;
-    reg rst;
-    reg start;
-    reg [127:0] in;
-    reg [127:0] key;
-    wire [127:0] out;
-  
-    aes_128 uut (
-        .clk(clk),
-        .rst(rst),
-        .start(start),
-        .in(in),
-        .key(key),
-        .out(out)
+    reg rst = 1;
+    reg start = 0;
+    reg [127:0] plaintext, key;
+    wire [127:0] ciphertext;
+    wire done;
+
+    aes_core dut (
+        .clk(clk), .rst(rst), .start(start),
+        .plaintext(plaintext), .key(key),
+        .ciphertext(ciphertext), .done(done)
     );
 
-  
     always #5 clk = ~clk;
 
+    // FIPS-197 Appendix B test vector
+    localparam [127:0] EXP_CT = 128'h69c4e0d86a7b0430d8cdb78070b4c55a;
+
     initial begin
-        $dumpfile("dump.vcd");
-        $dumpvars(0, aes_128_tb, uut);
+        plaintext = 128'h00112233445566778899aabbccddeeff;
+        key       = 128'h000102030405060708090a0b0c0d0e0f;
 
-        rst = 1; start = 0;
-        in  = 128'h00112233445566778899AABBCCDDEEFF;
-        key = 128'h000102030405060708090A0B0C0D0E0F;
+        @(negedge clk); rst = 0;
+        @(negedge clk);
+        start = 1;
+        @(negedge clk);
+        start = 0;
 
-        #20 rst = 0;
-        #10 start = 1;   
-        #10 start = 0;
+        wait (done == 1);
+        @(negedge clk);
 
-        #2000;
-
-        $display("Plaintext : %h", in);
-        $display("Key       : %h", key);
-        $display("Ciphertext: %h", out);
+        if (ciphertext === EXP_CT) begin
+            $display("PASS: ciphertext = %h (matches FIPS-197 vector)", ciphertext);
+        end else begin
+            $display("FAIL: got %h, expected %h", ciphertext, EXP_CT);
+        end
         $finish;
     end
 
+    initial begin
+        #500;
+        $display("TIMEOUT");
+        $finish;
+    end
 endmodule
